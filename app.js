@@ -1,6 +1,10 @@
 // ===== AnkiConnect API Wrapper =====
 class AnkiConnect {
-  constructor(url = 'http://127.0.0.1:8765') { this.url = url; }
+  constructor() {
+    // 本地访问直连 AnkiConnect，远程访问走 Nginx 代理
+    const isLocal = ['127.0.0.1', 'localhost'].includes(location.hostname);
+    this.url = isLocal ? 'http://127.0.0.1:8765' : '/anki';
+  }
   async invoke(action, params = {}) {
     const res = await fetch(this.url, {
       method: 'POST',
@@ -443,11 +447,11 @@ function escHtml(s) {
 function sanitizeHtml(html) {
   // Allow basic HTML from Anki but strip scripts
   return html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-             .replace(/on\w+="[^"]*"/gi, '');
+    .replace(/on\w+="[^"]*"/gi, '');
 }
 function formatDate(d) {
   const pad = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 function showToast(msg, type = 'success') {
   const t = document.createElement('div');
