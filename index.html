@@ -26,6 +26,36 @@
         </div>
       </div>
       <div class="heatmap-container" id="heatmap"></div>
+      <div class="review-stats" id="reviewStats">
+        <div class="review-stat-item">
+          <span class="review-stat-icon">📊</span>
+          <div class="review-stat-info">
+            <span class="review-stat-value" id="statDailyAvg">—</span>
+            <span class="review-stat-desc">日均复习</span>
+          </div>
+        </div>
+        <div class="review-stat-item">
+          <span class="review-stat-icon">📅</span>
+          <div class="review-stat-info">
+            <span class="review-stat-value" id="statDaysLearned">—</span>
+            <span class="review-stat-desc">学习天数</span>
+          </div>
+        </div>
+        <div class="review-stat-item">
+          <span class="review-stat-icon">🔥</span>
+          <div class="review-stat-info">
+            <span class="review-stat-value" id="statCurrentStreak">—</span>
+            <span class="review-stat-desc">当前连续</span>
+          </div>
+        </div>
+        <div class="review-stat-item">
+          <span class="review-stat-icon">🏆</span>
+          <div class="review-stat-info">
+            <span class="review-stat-value" id="statLongestStreak">—</span>
+            <span class="review-stat-desc">最长连续</span>
+          </div>
+        </div>
+      </div>
     </div>
     <nav class="sidebar-nav">
       <a class="nav-item active" id="navAll" data-filter="all">
@@ -36,18 +66,43 @@
       </a>
     </nav>
     <div class="sidebar-section">
+      <div class="section-header" id="flagHeader">
+        <span>🚩 旗标</span>
+        <span class="section-toggle">▾</span>
+      </div>
+      <div class="flag-list" id="flagList">
+        <div class="flag-item" data-flag="1"><span class="flag-dot" style="background:#ff4444"></span><span>红旗</span>
+        </div>
+        <div class="flag-item" data-flag="2"><span class="flag-dot" style="background:#ff8c00"></span><span>橙旗</span>
+        </div>
+        <div class="flag-item" data-flag="3"><span class="flag-dot" style="background:#4caf50"></span><span>绿旗</span>
+        </div>
+        <div class="flag-item" data-flag="4"><span class="flag-dot" style="background:#448aff"></span><span>蓝旗</span>
+        </div>
+        <div class="flag-item" data-flag="5"><span class="flag-dot" style="background:#e91e90"></span><span>粉旗</span>
+        </div>
+        <div class="flag-item" data-flag="6"><span class="flag-dot" style="background:#00bcd4"></span><span>青旗</span>
+        </div>
+        <div class="flag-item" data-flag="7"><span class="flag-dot" style="background:#9c27b0"></span><span>紫旗</span>
+        </div>
+      </div>
+    </div>
+    <div class="sidebar-section">
       <div class="section-header" id="tagHeader">
         <span>🏷️ 标签</span>
+        <span class="section-toggle">▾</span>
       </div>
-      <div class="tag-search-box">
-        <input type="text" id="tagSearchInput" placeholder="搜索标签...">
+      <div id="tagContent">
+        <div class="tag-search-box">
+          <input type="text" id="tagSearchInput" placeholder="搜索标签...">
+        </div>
+        <div class="pinned-tags" id="pinnedTags"></div>
+        <div class="more-tags-toggle" id="moreTagsToggle">
+          <span>▸ 更多标签</span>
+          <span class="more-tags-count" id="moreTagsCount"></span>
+        </div>
+        <div class="tag-tree collapsed" id="tagTree"></div>
       </div>
-      <div class="pinned-tags" id="pinnedTags"></div>
-      <div class="more-tags-toggle" id="moreTagsToggle">
-        <span>▸ 更多标签</span>
-        <span class="more-tags-count" id="moreTagsCount"></span>
-      </div>
-      <div class="tag-tree collapsed" id="tagTree"></div>
     </div>
     <div class="sidebar-section">
       <div class="section-header" id="deckHeader">

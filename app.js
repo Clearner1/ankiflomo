@@ -16,6 +16,10 @@ class AnkiConnect {
   }
   getTags() { return this.invoke('getTags'); }
   findNotes(query) { return this.invoke('findNotes', { query }); }
+  findCards(query) { return this.invoke('findCards', { query }); }
+  cardsToNotes(cards) { return this.invoke('cardsToNotes', { cards }); }
+  cardsInfo(cards) { return this.invoke('cardsInfo', { cards }); }
+  cardReviews(deck, startID) { return this.invoke('cardReviews', { deck, startID }); }
   notesInfo(notes) { return this.invoke('notesInfo', { notes }); }
   addNote(deckName, modelName, fields, tags = []) {
     return this.invoke('addNote', { note: { deckName, modelName, fields, tags, options: { allowDuplicate: true } } });
@@ -130,20 +134,31 @@ function renderAllTags(filter = '') {
   el.pinnedTags.innerHTML = '';
   pinned.forEach(pinnedTag => {
     // Collect this tag + all descendants
-    const prefix = pinnedTag + '::';
-    const descendants = state.allTags.filter(t => t === pinnedTag || t.startsWith(prefix));
+    const childPrefix = pinnedTag + '::';
+    const descendants = state.allTags.filter(t => t === pinnedTag || t.startsWith(childPrefix));
     // Apply search filter
     const filtered = filterLower
       ? descendants.filter(t => t.toLowerCase().includes(filterLower))
       : descendants;
     if (filtered.length === 0) return;
-    // Strip the parent prefix to build a relative subtree
-    const parentPrefix = pinnedTag.includes('::')
-      ? pinnedTag.substring(0, pinnedTag.lastIndexOf('::') + 2)
-      : '';
-    const relativeTags = filtered.map(t => t.substring(parentPrefix.length));
-    const tree = buildTagTree(relativeTags);
-    renderTagNodes(tree, el.pinnedTags, parentPrefix ? parentPrefix.slice(0, -2) : '', true);
+    // Build tree using full tag paths, then render starting from the correct parent prefix
+    const tree = buildTagTree(filtered);
+    // Navigate the tree to find the pinned tag's node
+    const parts = pinnedTag.split('::');
+    let subtree = tree;
+    let parentPath = '';
+    for (let i = 0; i < parts.length - 1; i++) {
+      if (subtree[parts[i]] && subtree[parts[i]]._children) {
+        subtree = subtree[parts[i]]._children;
+      }
+      parentPath += (parentPath ? '::' : '') + parts[i];
+    }
+    // Now render starting from the last part of the pinned tag
+    const lastPart = parts[parts.length - 1];
+    if (subtree[lastPart]) {
+      const pinnedSubtree = { [lastPart]: subtree[lastPart] };
+      renderTagNodes(pinnedSubtree, el.pinnedTags, parentPath, true);
+    }
   });
 
   // === Render full tree in "more tags" ===
@@ -270,35 +285,169 @@ async function loadHeatmap() {
 }
 
 function renderHeatmap(data) {
-  const weeks = 16, cellSize = 10, gap = 2, total = cellSize + gap;
+  const weeks = 12, cellSize = 13, gap = 2, total = cellSize + gap;
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Build day map
   const dayMap = {};
   let maxCount = 1;
   data.forEach(([dateStr, count]) => {
     dayMap[dateStr] = count;
     if (count > maxCount) maxCount = count;
   });
+
+  // Warm color palette (transparent → yellow → orange → red → dark red)
+  const colors = [
+    'rgba(255,255,255,.06)',
+    '#4d3800',
+    '#804d00',
+    '#cc6600',
+    '#e68a00',
+    '#ffaa00'
+  ];
+
   const cols = weeks;
   const rows = 7;
   const w = cols * total + 2;
   const h = rows * total + 2;
-  let svg = `<svg width="${w}" height="${h}" xmlns="http://www.w3.org/2000/svg">`;
-  for (let wi = cols - 1; wi >= 0; wi--) {
+
+  let svg = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">`;
+
+  for (let wi = 0; wi < cols; wi++) {
     for (let di = 0; di < 7; di++) {
-      const daysAgo = (cols - 1 - wi) * 7 + (6 - di) + (today.getDay());
+      // Calculate date for this cell
+      const todayDay = today.getDay() === 0 ? 6 : today.getDay() - 1; // Mon=0
+      const daysAgo = (cols - 1 - wi) * 7 + (todayDay - di);
       const d = new Date(today);
-      d.setDate(d.getDate() - daysAgo + today.getDay());
+      d.setDate(d.getDate() - daysAgo);
       const key = d.toISOString().split('T')[0];
       const count = dayMap[key] || 0;
-      const intensity = count === 0 ? 0 : Math.min(4, Math.ceil((count / maxCount) * 4));
-      const colors = ['rgba(255,255,255,.06)', '#0e4429', '#006d32', '#26a641', '#39d353'];
+      const intensity = count === 0 ? 0 : Math.min(5, Math.ceil((count / maxCount) * 5));
       const x = wi * total + 1;
       const y = di * total + 1;
-      svg += `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" rx="2" fill="${colors[intensity]}" title="${key}: ${count}"><title>${key}: ${count}</title></rect>`;
+      svg += `<rect x="${x}" y="${y}" width="${cellSize}" height="${cellSize}" rx="2" fill="${colors[intensity]}" data-date="${key}" data-count="${count}"></rect>`;
     }
   }
   svg += '</svg>';
   el.heatmap.innerHTML = svg;
+
+  // Add tooltip
+  const tooltip = document.createElement('div');
+  tooltip.className = 'heatmap-tooltip';
+  el.heatmap.appendChild(tooltip);
+
+  el.heatmap.querySelectorAll('rect').forEach(rect => {
+    rect.addEventListener('mouseenter', (e) => {
+      const date = rect.dataset.date;
+      const count = rect.dataset.count;
+      tooltip.textContent = `${date}：${count} 张卡片`;
+      tooltip.classList.add('visible');
+      const r = rect.getBoundingClientRect();
+      const c = el.heatmap.getBoundingClientRect();
+      tooltip.style.left = `${r.left - c.left + r.width / 2 - tooltip.offsetWidth / 2}px`;
+      tooltip.style.top = `${r.top - c.top - tooltip.offsetHeight - 4}px`;
+    });
+    rect.addEventListener('mouseleave', () => {
+      tooltip.classList.remove('visible');
+    });
+    // Click to filter by review date
+    rect.style.cursor = 'pointer';
+    rect.addEventListener('click', () => {
+      const date = rect.dataset.date;
+      const count = parseInt(rect.dataset.count);
+      if (count === 0) return;
+      // Convert date to Unix ms timestamp range (start of day to end of day)
+      const dayStart = new Date(date + 'T00:00:00');
+      const dayEnd = new Date(date + 'T23:59:59');
+      const startMs = dayStart.getTime();
+      const endMs = dayEnd.getTime();
+      const query = `rid:${startMs}:${endMs}`;
+      setFilter(query, `📅 ${date} 复习的卡片 (${count}张)`);
+      // Highlight the clicked cell
+      el.heatmap.querySelectorAll('rect').forEach(r => r.removeAttribute('stroke'));
+      rect.setAttribute('stroke', '#ffaa00');
+      rect.setAttribute('stroke-width', '2');
+      // Close sidebar on mobile
+      if (window.innerWidth <= 768) {
+        el.sidebar.classList.remove('open');
+        el.overlay.classList.remove('active');
+      }
+    });
+  });
+
+  // === Compute review stats ===
+  computeReviewStats(data, dayMap);
+}
+
+function computeReviewStats(data, dayMap) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Determine date range from data
+  const allDates = data.map(([d]) => d).sort();
+  if (allDates.length === 0) {
+    $('statDailyAvg').textContent = '0';
+    $('statDaysLearned').textContent = '0%';
+    $('statCurrentStreak').textContent = '0天';
+    $('statLongestStreak').textContent = '0天';
+    return;
+  }
+
+  // Daily average: total reviews / total days in range
+  const totalReviews = data.reduce((sum, [, c]) => sum + c, 0);
+  const firstDate = new Date(allDates[0]);
+  const lastDate = new Date(allDates[allDates.length - 1]);
+  const totalDaysInRange = Math.max(1, Math.round((lastDate - firstDate) / 86400000) + 1);
+  const dailyAvg = Math.round(totalReviews / totalDaysInRange);
+
+  // Days learned: days with reviews / total days in range
+  const daysWithReviews = data.filter(([, c]) => c > 0).length;
+  const daysLearnedPct = Math.round((daysWithReviews / totalDaysInRange) * 100);
+
+  // Current streak: consecutive days ending today (or yesterday)
+  let currentStreak = 0;
+  let checkDate = new Date(today);
+  // If no reviews today, start checking from yesterday
+  const todayKey = checkDate.toISOString().split('T')[0];
+  if (!dayMap[todayKey] || dayMap[todayKey] === 0) {
+    checkDate.setDate(checkDate.getDate() - 1);
+  }
+  while (true) {
+    const key = checkDate.toISOString().split('T')[0];
+    if (dayMap[key] && dayMap[key] > 0) {
+      currentStreak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+
+  // Longest streak
+  let longestStreak = 0;
+  let tempStreak = 0;
+  const sortedDates = data.filter(([, c]) => c > 0).map(([d]) => d).sort();
+  for (let i = 0; i < sortedDates.length; i++) {
+    if (i === 0) {
+      tempStreak = 1;
+    } else {
+      const prev = new Date(sortedDates[i - 1]);
+      const curr = new Date(sortedDates[i]);
+      const diff = Math.round((curr - prev) / 86400000);
+      if (diff === 1) {
+        tempStreak++;
+      } else {
+        tempStreak = 1;
+      }
+    }
+    if (tempStreak > longestStreak) longestStreak = tempStreak;
+  }
+
+  // Update DOM
+  $('statDailyAvg').textContent = dailyAvg;
+  $('statDaysLearned').textContent = `${daysLearnedPct}%`;
+  $('statCurrentStreak').textContent = `${currentStreak}天`;
+  $('statLongestStreak').textContent = `${longestStreak}天`;
 }
 
 // ===== Notes =====
@@ -311,7 +460,46 @@ async function loadNotes(query) {
   el.loading.style.display = 'flex';
   el.emptyState.style.display = 'none';
   try {
-    state.noteIds = await anki.findNotes(query);
+    // Card-level queries (rid:, flag:) need findCards → cardsToNotes
+    const isCardQuery = query.startsWith('flag:');
+    if (query.startsWith('rid:')) {
+      const match = query.match(/^rid:(\d+):(\d+)$/);
+      if (match) {
+        const startMs = parseInt(match[1]);
+        const endMs = parseInt(match[2]);
+        // Get all decks and fetch reviews from each
+        const decks = await anki.deckNames();
+        const allCardIds = new Set();
+        for (const deck of decks) {
+          const reviews = await anki.cardReviews(deck, startMs);
+          // Each review is [reviewTime, cardID, ...]
+          reviews.forEach(r => {
+            if (r[0] >= startMs && r[0] <= endMs) {
+              allCardIds.add(r[1]);
+            }
+          });
+        }
+        if (allCardIds.size > 0) {
+          const noteIds = await anki.cardsToNotes([...allCardIds]);
+          state.noteIds = [...new Set(noteIds)];
+        } else {
+          state.noteIds = [];
+        }
+      } else {
+        state.noteIds = [];
+      }
+    } else if (isCardQuery) {
+      // flag: is a card-level property, use findCards → cardsToNotes
+      const cardIds = await anki.findCards(query);
+      if (cardIds.length > 0) {
+        const noteIds = await anki.cardsToNotes(cardIds);
+        state.noteIds = [...new Set(noteIds)];
+      } else {
+        state.noteIds = [];
+      }
+    } else {
+      state.noteIds = await anki.findNotes(query);
+    }
     state.noteIds.reverse(); // newest first
     el.statNotes.textContent = state.noteIds.length;
     if (state.noteIds.length === 0) {
@@ -396,7 +584,7 @@ function setFilter(query, label) {
 function clearFilter() {
   state.currentFilter = '';
   el.filterInfo.style.display = 'none';
-  document.querySelectorAll('.tag-row.active, .deck-item.active').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.tag-row.active, .deck-item.active, .flag-item.active').forEach(el => el.classList.remove('active'));
   el.navAll.classList.add('active');
   loadNotes('*');
 }
@@ -503,6 +691,11 @@ function setupEvents() {
     el.sidebar.classList.remove('open');
     el.overlay.classList.remove('active');
   });
+  // Tag section collapse
+  $('tagHeader').addEventListener('click', () => {
+    $('tagHeader').classList.toggle('collapsed');
+    $('tagContent').style.display = $('tagHeader').classList.contains('collapsed') ? 'none' : '';
+  });
   // Tag search
   el.tagSearchInput.addEventListener('input', () => {
     renderAllTags(el.tagSearchInput.value.trim());
@@ -516,6 +709,23 @@ function setupEvents() {
   $('deckHeader').addEventListener('click', () => {
     $('deckHeader').classList.toggle('collapsed');
     el.deckList.style.display = $('deckHeader').classList.contains('collapsed') ? 'none' : '';
+  });
+  // Flag section collapse
+  $('flagHeader').addEventListener('click', () => {
+    $('flagHeader').classList.toggle('collapsed');
+    $('flagList').style.display = $('flagHeader').classList.contains('collapsed') ? 'none' : '';
+  });
+  // Flag click to filter
+  document.querySelectorAll('.flag-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const flagNum = item.dataset.flag;
+      const flagNames = { '1': '红旗', '2': '橙旗', '3': '绿旗', '4': '蓝旗', '5': '粉旗', '6': '青旗', '7': '紫旗' };
+      setFilter(`flag:${flagNum}`, `🚩 ${flagNames[flagNum]}`);
+      // Highlight active flag
+      document.querySelectorAll('.flag-item.active').forEach(f => f.classList.remove('active'));
+      item.classList.add('active');
+      clearNavActive();
+    });
   });
   // Ctrl+K search focus
   document.addEventListener('keydown', (e) => {
