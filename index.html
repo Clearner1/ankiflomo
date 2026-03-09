@@ -120,6 +120,8 @@
         <span class="search-icon">🔍</span>
         <input type="text" id="searchInput" placeholder="搜索笔记... (支持 Anki 搜索语法)">
       </div>
+      <button class="tts-btn" id="ttsBtn" title="朗读筛选的笔记">🔊 朗读</button>
+      <button class="tts-settings-btn" id="ttsSettingsBtn" title="TTS 设置">⚙️</button>
       <button class="sync-btn" id="syncBtn" title="同步">🔄 同步</button>
     </header>
 
@@ -156,6 +158,36 @@
   </main>
 
   <div class="overlay" id="overlay"></div>
+
+  <!-- TTS Player Bar -->
+  <div class="tts-player" id="ttsPlayer" style="display:none">
+    <div class="tts-player-inner">
+      <div class="tts-player-info">
+        <span class="tts-progress" id="ttsProgress">0/0</span>
+        <span class="tts-current-text" id="ttsCurrentText">准备中...</span>
+      </div>
+      <div class="tts-player-controls">
+        <button class="tts-ctrl" id="ttsPrev" title="上一条">⏮</button>
+        <button class="tts-ctrl tts-play-pause" id="ttsPlayPause" title="暂停">⏸</button>
+        <button class="tts-ctrl" id="ttsNext" title="下一条">⏭</button>
+        <button class="tts-ctrl tts-stop" id="ttsStop" title="停止">⏹</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TTS Settings Modal -->
+  <div class="tts-modal-overlay" id="ttsModalOverlay" style="display:none">
+    <div class="tts-modal">
+      <h3>🔊 TTS 设置</h3>
+      <label>MiniMax API Key</label>
+      <input type="password" id="ttsApiKeyInput" placeholder="输入你的 API Key...">
+      <div class="tts-modal-actions">
+        <button class="tts-modal-cancel" id="ttsModalCancel">取消</button>
+        <button class="tts-modal-save" id="ttsModalSave">保存</button>
+      </div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 

@@ -778,5 +778,192 @@ const style = document.createElement('style');
 style.textContent = '@keyframes fadeOut { to { opacity: 0; transform: translateY(-8px); } }';
 document.head.appendChild(style);
 
+// ===== TTS Module (MiniMax) =====
+const tts = (() => {
+  const TTS_MODEL = 'speech-2.8-turbo';
+  const TTS_VOICE = 'Chinese (Mandarin)_Crisp_Girl';
+  const LS_KEY = 'ankimo_minimax_api_key';
+
+  let notes = [];
+  let currentIdx = 0;
+  let audio = null;
+  let isPlaying = false;
+  let isPaused = false;
+
+  // DOM refs
+  const player = document.getElementById('ttsPlayer');
+  const progressEl = document.getElementById('ttsProgress');
+  const textEl = document.getElementById('ttsCurrentText');
+  const playPauseBtn = document.getElementById('ttsPlayPause');
+  const ttsBtn = document.getElementById('ttsBtn');
+
+  // Settings modal
+  const modalOverlay = document.getElementById('ttsModalOverlay');
+  const apiKeyInput = document.getElementById('ttsApiKeyInput');
+
+  function getApiKey() { return localStorage.getItem(LS_KEY) || ''; }
+  function setApiKey(k) { localStorage.setItem(LS_KEY, k); }
+
+  function openSettings() {
+    apiKeyInput.value = getApiKey();
+    modalOverlay.style.display = 'flex';
+  }
+  function closeSettings() { modalOverlay.style.display = 'none'; }
+
+  document.getElementById('ttsSettingsBtn').addEventListener('click', openSettings);
+  document.getElementById('ttsModalCancel').addEventListener('click', closeSettings);
+  document.getElementById('ttsModalSave').addEventListener('click', () => {
+    setApiKey(apiKeyInput.value.trim());
+    closeSettings();
+    showToast('API Key 已保存');
+  });
+
+  // Strip HTML tags to plain text
+  function stripHtml(html) {
+    const tmp = document.createElement('div');
+    tmp.innerHTML = html;
+    return tmp.textContent.replace(/\s+/g, ' ').trim();
+  }
+
+  // Collect currently filtered notes
+  function collectNotes() {
+    const cards = document.querySelectorAll('.note-card');
+    const items = [];
+    cards.forEach(card => {
+      const fields = card.querySelectorAll('.note-field-content');
+      if (fields.length >= 2) {
+        const q = stripHtml(fields[0].innerHTML);
+        const a = stripHtml(fields[1].innerHTML);
+        if (q || a) items.push({ q, a });
+      }
+    });
+    return items;
+  }
+
+  function updateUI() {
+    progressEl.textContent = `${currentIdx + 1}/${notes.length}`;
+    const n = notes[currentIdx];
+    textEl.textContent = n ? `Q: ${n.q.slice(0, 60)}...` : '';
+    playPauseBtn.textContent = isPaused ? '▶️' : '⏸';
+    playPauseBtn.title = isPaused ? '继续' : '暂停';
+  }
+
+  async function synthesize(text) {
+    const key = getApiKey();
+    if (!key) {
+      openSettings();
+      throw new Error('需要 API Key');
+    }
+    const body = {
+      model: TTS_MODEL,
+      text,
+      stream: false,
+      output_format: 'url',
+      voice_setting: { voice_id: TTS_VOICE, speed: 1, vol: 1, pitch: 0 },
+      audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 },
+      language_boost: 'Chinese',
+    };
+    const resp = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-API-Key': key },
+      body: JSON.stringify(body),
+    });
+    if (!resp.ok) {
+      const err = await resp.text();
+      throw new Error(`TTS 请求失败 (${resp.status}): ${err}`);
+    }
+    const data = await resp.json();
+    if (data.base_resp && data.base_resp.status_code !== 0) {
+      throw new Error(`TTS 错误: ${data.base_resp.status_msg}`);
+    }
+    // output_format=url → data.data.audio is a URL
+    if (data.data && data.data.audio) {
+      return data.data.audio;
+    }
+    throw new Error('未收到音频数据');
+  }
+
+  async function playNote(idx) {
+    if (idx < 0 || idx >= notes.length) { stop(); return; }
+    currentIdx = idx;
+    isPaused = false;
+    updateUI();
+
+    const n = notes[idx];
+    // Use MiniMax's <#2#> pause tag for 2s gap between Q and A
+    const text = `问题：${n.q} <#2#> 答案：${n.a}`;
+    textEl.textContent = `🔊 正在合成...  Q: ${n.q.slice(0, 40)}`;
+
+    try {
+      const audioUrl = await synthesize(text);
+      if (!isPlaying) return; // stopped while waiting
+
+      if (audio) { audio.pause(); audio = null; }
+      audio = new Audio(audioUrl);
+      audio.addEventListener('ended', () => {
+        if (isPlaying && !isPaused) {
+          playNote(currentIdx + 1);
+        }
+      });
+      audio.addEventListener('error', (e) => {
+        showToast(`音频播放失败: ${e.message || '未知错误'}`);
+        stop();
+      });
+      updateUI();
+      await audio.play();
+    } catch (err) {
+      showToast(err.message);
+      stop();
+    }
+  }
+
+  function start() {
+    notes = collectNotes();
+    if (notes.length === 0) {
+      showToast('没有可朗读的笔记，请先筛选');
+      return;
+    }
+    if (!getApiKey()) { openSettings(); return; }
+    isPlaying = true;
+    isPaused = false;
+    currentIdx = 0;
+    player.style.display = '';
+    ttsBtn.classList.add('active');
+    playNote(0);
+  }
+
+  function stop() {
+    isPlaying = false;
+    isPaused = false;
+    if (audio) { audio.pause(); audio = null; }
+    player.style.display = 'none';
+    ttsBtn.classList.remove('active');
+  }
+
+  function togglePause() {
+    if (!audio) return;
+    if (isPaused) {
+      audio.play();
+      isPaused = false;
+    } else {
+      audio.pause();
+      isPaused = true;
+    }
+    updateUI();
+  }
+
+  function prev() { if (isPlaying) playNote(Math.max(0, currentIdx - 1)); }
+  function next() { if (isPlaying) playNote(currentIdx + 1); }
+
+  // Wire buttons
+  ttsBtn.addEventListener('click', () => { isPlaying ? stop() : start(); });
+  playPauseBtn.addEventListener('click', togglePause);
+  document.getElementById('ttsPrev').addEventListener('click', prev);
+  document.getElementById('ttsNext').addEventListener('click', next);
+  document.getElementById('ttsStop').addEventListener('click', stop);
+
+  return { start, stop };
+})();
+
 // ===== Start =====
 init();
