@@ -1,4 +1,4 @@
-# 📝 AnkiFlomo
+# 📝 Ankimo
 
 一个类似 [Flomo](https://flomoapp.com/) 风格的 Anki 笔记管理器，通过 [AnkiConnect](https://foosoft.net/projects/anki-connect/) 插件连接你的 Anki，让你在浏览器中以更优雅的方式浏览、搜索和创建笔记。
 
@@ -30,8 +30,8 @@
 ### 方法一：直接打开（本地使用）
 
 ```bash
-git clone https://github.com/Clearner1/ankiflomo.git
-cd ankiflomo
+git clone https://github.com/Clearner1/ankimo.git
+cd ankimo
 
 # 启动本地服务器
 python3 -m http.server 3000
@@ -42,8 +42,8 @@ python3 -m http.server 3000
 ### 方法二：Docker 部署（推荐，支持远程访问）
 
 ```bash
-git clone https://github.com/Clearner1/ankiflomo.git
-cd ankiflomo
+git clone https://github.com/Clearner1/ankimo.git
+cd ankimo
 
 # 生成密码文件（用户名: anki，密码自定义）
 htpasswd -c .htpasswd anki
@@ -61,7 +61,7 @@ docker compose up -d --build
 ```yaml
 # ~/.cloudflared/config.yml 添加一条 ingress 规则
 ingress:
-  - hostname: ankiflomo.你的域名.com
+  - hostname: ankimo.你的域名.com
     service: http://localhost:3000
 ```
 
@@ -69,7 +69,7 @@ ingress:
 
 ```bash
 # 添加 CNAME 记录
-cloudflared tunnel route dns <TUNNEL_ID> ankiflomo.你的域名.com
+cloudflared tunnel route dns <TUNNEL_ID> ankimo.你的域名.com
 
 # 重启 tunnel
 brew services restart cloudflared
@@ -82,7 +82,7 @@ brew services restart cloudflared
 ## 🏗️ 项目结构
 
 ```
-ankiflomo/
+ankimo/
 ├── index.html         # 页面结构
 ├── style.css          # 样式（暗色侧边栏 + 亮色内容区）
 ├── app.js             # 应用逻辑（API 通信、标签树、笔记渲染）

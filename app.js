@@ -1,4 +1,4 @@
-// ===== AnkiConnect API Wrapper =====
+// ===== AnkiConnect API Wrapper (Ankimo) =====
 class AnkiConnect {
   constructor() {
     // 本地访问直连 AnkiConnect，远程访问走 Nginx 代理
@@ -92,7 +92,7 @@ async function loadTags() {
   renderAllTags();
 }
 
-const CONFIG_FILE = '_ankiflomo_config.json';
+const CONFIG_FILE = '_ankimo_config.json';
 
 async function loadPinnedTags() {
   try {
@@ -103,14 +103,14 @@ async function loadPinnedTags() {
     }
   } catch (e) {
     console.warn('Load pinned tags from Anki failed, using localStorage fallback', e);
-    state.pinnedTags = JSON.parse(localStorage.getItem('ankiflomo_pinned_tags') || '[]');
+    state.pinnedTags = JSON.parse(localStorage.getItem('ankimo_pinned_tags') || '[]');
   }
 }
 
 async function savePinnedTags() {
   const config = JSON.stringify({ pinnedTags: state.pinnedTags });
   // Save to both Anki and localStorage (fallback)
-  localStorage.setItem('ankiflomo_pinned_tags', JSON.stringify(state.pinnedTags));
+  localStorage.setItem('ankimo_pinned_tags', JSON.stringify(state.pinnedTags));
   try {
     await anki.storeMediaFile(CONFIG_FILE, config);
   } catch (e) {
